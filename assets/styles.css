@@ -97,3 +97,4 @@ input:focus,select:focus,textarea:focus{outline:3px solid rgba(217,154,62,.35);b
 @media(min-width:960px){.nav a,.brand span,.lang-switch{white-space:nowrap}.nav ul{gap:16px}.nav a{font-size:.95rem}}
 .prose h1{margin-bottom:.2em}.prose h2{font-size:1.35rem;margin-top:1.6em}.prose ul{padding-left:1.2em}.prose li{margin-bottom:6px}.prose address{font-style:normal;line-height:1.7}
 button[disabled]{opacity:.6;cursor:wait}
+.form-status.pending{color:var(--muted)}

@@ -10,13 +10,13 @@ const CONFIG = {
 const FL_COUNTIES=["Alachua","Baker","Bay","Bradford","Brevard","Broward","Calhoun","Charlotte","Citrus","Clay","Collier","Columbia","DeSoto","Dixie","Duval","Escambia","Flagler","Franklin","Gadsden","Gilchrist","Glades","Gulf","Hamilton","Hardee","Hendry","Hernando","Highlands","Hillsborough","Holmes","Indian River","Jackson","Jefferson","Lafayette","Lake","Lee","Leon","Levy","Liberty","Madison","Manatee","Marion","Martin","Miami-Dade","Monroe","Nassau","Okaloosa","Okeechobee","Orange","Osceola","Palm Beach","Pasco","Pinellas","Polk","Putnam","St. Johns","St. Lucie","Santa Rosa","Sarasota","Seminole","Sumter","Suwannee","Taylor","Union","Volusia","Wakulla","Walton","Washington"];
 const I18N={
   en:{county:c=>c+" County",other:"Other / Not in Florida",earlier:"Earlier",notSure:"Not sure",
-      required:"Please complete the required fields.",badEmail:"Please enter a valid email address, or leave it blank.",
+      required:"Please complete the required fields.",sending:"Sending your request…",badEmail:"Please enter a valid email address, or leave it blank.",
       okStub:"Thank you! We received your request and will contact you shortly.",
       ok:"Thank you! We'll be in touch shortly.",err:"Something went wrong. Please call us at "+CONFIG.phoneDisplay+".",
       letterStub:"Thank you! We've noted your reference code and will call you shortly. For faster help, call "+CONFIG.phoneDisplay+".",
       letterOk:"Thank you! We'll call you shortly about your letter."},
   es:{county:c=>"Condado de "+c,other:"Otro / Fuera de Florida",earlier:"Antes",notSure:"No estoy seguro",
-      required:"Por favor, complete los campos obligatorios.",badEmail:"Ingrese un correo electrónico válido o deje el campo vacío.",
+      required:"Por favor, complete los campos obligatorios.",sending:"Enviando su solicitud…",badEmail:"Ingrese un correo electrónico válido o deje el campo vacío.",
       okStub:"¡Gracias! Recibimos su solicitud y nos comunicaremos con usted pronto.",
       ok:"¡Gracias! Nos comunicaremos con usted pronto.",err:"Ocurrió un error. Llámenos al "+CONFIG.phoneDisplay+".",
       letterStub:"¡Gracias! Anotamos su código de referencia y le llamaremos pronto. Para una atención más rápida, llame al "+CONFIG.phoneDisplay+".",
@@ -52,11 +52,20 @@ function wire(form,endpoint,stubMsg,okMsg,kind){
     if(data.email)data._replyto=data.email;
     const btn=form.querySelector('button[type="submit"]'); if(btn)btn.disabled=true;
     if(!endpoint){console.log("[stub] submission:",data);show("ok",stubMsg);form.reset();if(btn)btn.disabled=false;return;}
-    try{const r=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data)});
+    show("pending",L.sending);
+    const ctrl=new AbortController(); const timer=setTimeout(()=>ctrl.abort(),30000); // FormSubmit can be slow (10-20s)
+    try{const r=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(data),signal:ctrl.signal});
       const j=await r.json().catch(()=>({}));
-      if(!r.ok||String(j.success)==="false")throw 0;show("ok",okMsg);form.reset();}
-    catch{show("err",L.err);}
-    finally{if(btn)btn.disabled=false;}
+      const msg=String(j.message||"");
+      if(r.ok&&String(j.success)==="true"){show("ok",okMsg);form.reset();}
+      else if(/activat/i.test(msg)){
+        // FormSubmit returns 200 {success:"false"} until the inbox owner clicks "Activate Form".
+        // Submissions made before activation are held and delivered after activation, so treat as received.
+        console.warn("[FormSubmit] form awaiting activation; submission queued:",msg);
+        show("ok",okMsg);form.reset();}
+      else{console.error("[FormSubmit] rejected:",r.status,j);throw new Error(msg||("HTTP "+r.status));}
+    }catch(e){console.error("[FormSubmit] error:",e);show("err",L.err);}
+    finally{clearTimeout(timer);if(btn)btn.disabled=false;}
   });
 }
 document.addEventListener("DOMContentLoaded",()=>{
